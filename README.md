@@ -22,5 +22,6 @@ Some picture:
 Measuring the VDET pin of the adapter's PA (can indicate TX status). The waveform stands for NDPA, SIFS slot, NDP, and re-transmissions (as no bfee when taking the picture), respectively
 ![image](https://github.com/user-attachments/assets/50bc6bb0-0dae-4940-b354-8eaf719d8218)
 
-One CBR frame, captured on the beamformer side, with 2 8812eu (2T2R) as bfer & bfee
+One CBR frame, captured on the beamformer side, with 2 8812eu (2T2R) as bfer & bfee  
+See CBR_cap_20_40_80M.pcapng  
 ![image](https://github.com/user-attachments/assets/c7dbeb3f-4633-4ce1-b5fd-09692c63c784)  
