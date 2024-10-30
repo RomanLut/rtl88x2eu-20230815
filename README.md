@@ -67,3 +67,4 @@ Measuring the VDET pin of the adapter's PA (can indicate TX status). The wavefor
 One CBR frame, captured on the beamformer side, with 2 8812eu (2T2R) as bfer & bfee  
 The capture in this screenshot is [CBR_cap_20_40_80M.pcapng](https://github.com/libc0607/rtl88x2eu-20230815/blob/beamforming_research/CBR_cap_20_40_80M.pcapng).
 ![image](https://github.com/user-attachments/assets/c7dbeb3f-4633-4ce1-b5fd-09692c63c784)  
+
