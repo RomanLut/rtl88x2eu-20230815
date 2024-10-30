@@ -38,7 +38,7 @@ Note: the chipset does not support RX beamforming. Only the Maximum Ratio Combin
  - Beamformee: the role receiving NDPA & NDP, calculate and send the CBR frame
 
 Scenario: 
-Two RTL8812EU adapters with this driver, **STBC disabled, injecting packets only in HT MCS 0~7 or VHT MCS 0~9**  
+Two RTL8812EU adapters with this driver, **STBC disabled, injecting packets only in HT MCS 0\~7 or VHT MCS 0\~9**  
 ```
 BFer: 00:66:77:88:99:aa
 BFee: 00:11:22:33:44:55
