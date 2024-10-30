@@ -6274,6 +6274,34 @@ show_usage:
         return -EFAULT;
 }
 
+
+static ssize_t proc_set_bf_monitor_en(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct registry_priv	*pregpriv = &padapter->registrypriv;
+	char tmp[128];
+	
+        u8 en;
+	
+	if (!padapter)
+		return -EFAULT;
+
+	if (count > sizeof(tmp)) 
+		return -EFAULT;
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		int num = sscanf(tmp, "%hhu", &en);
+		if (num < 1)
+			return -EFAULT;
+	}
+	
+	bf_monitor_enable_txbf(padapter, en>0? _TRUE: _FALSE);
+        RTW_INFO("bf_monitor_enable, %hhu \n", en);
+	return count;
+}
+
+
 /*
 * rtw_adapter_proc:
 * init/deinit when register/unregister net_device
@@ -6285,6 +6313,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #ifdef CONFIG_BEAMFORMING_MONITOR
         RTW_PROC_HDL_SSEQ("bf_monitor_conf", proc_get_bf_monitor_conf, proc_set_bf_monitor_conf),
         RTW_PROC_HDL_SSEQ("bf_monitor_trig", proc_get_bf_monitor_trig, proc_set_bf_monitor_trig),
+        RTW_PROC_HDL_SSEQ("bf_monitor_en",   NULL,                     proc_set_bf_monitor_en),
 #endif
 #if RTW_SEQ_FILE_TEST
 	RTW_PROC_HDL_SEQ("seq_file_test", &seq_file_test, NULL),

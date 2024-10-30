@@ -244,6 +244,7 @@ void bf_monitor_sounding_config(PADAPTER adapter,
 		      txbf_ctrl |= BIT_R_TXBF0_20M_8822E;
 		      break;
 	      }
+	      txbf_ctrl |= BIT_DIS_NDP_BFEN_8822E;
         }
 	rtw_write32(adapter, REG_TXBF_CTRL_8822E, txbf_ctrl);
 }
@@ -544,7 +545,7 @@ void bf_monitor_print_cbr(PADAPTER adapter, struct seq_file *m)
     RTW_PRINT_SEL(m, "Sounding Dialog Token: %hhu\n", csi->token);
     for (i=0; i<(csi->nc+1); i++) {
         tmp_snr = (csi->snr[i]*25) + 2200;  // tmp_snr: 0.01dB unit
-        RTW_PRINT_SEL(m, "Average Signal to Noise Ratio - Stream %hhu: %02hs.%02hs dB\n", i, tmp_snr/100, tmp_snr%100);
+        RTW_PRINT_SEL(m, "Average Signal to Noise Ratio - Stream %hhu: %d mBm\n", i, tmp_snr);
     }
     RTW_PRINT_SEL(m, "CSI Matrix Len: %hu\n", csi->csi_matrix_len);
     RTW_PRINT_SEL(m, "CSI Matrix: \n");
@@ -552,7 +553,7 @@ void bf_monitor_print_cbr(PADAPTER adapter, struct seq_file *m)
         for (j=0; j<16; j++) {
             if (i*16+j == csi->csi_matrix_len)
                 break;
-            RTW_PRINT_SEL(m, "%hhu ", csi->csi_matrix[i*16+j]);
+            RTW_PRINT_SEL(m, "%02x ", csi->csi_matrix[i*16+j]);
         }
         RTW_PRINT_SEL(m, "\n");
     }
@@ -567,16 +568,15 @@ void bf_monitor_print_conf(PADAPTER adapter, struct seq_file *m)
     txbf_ctrl = rtw_read32(adapter, REG_TXBF_CTRL_8822E);
     
     addr_bfer_info = REG_ASSOCIATED_BFMER0_INFO_8822E;
-    	for (i = 0; i < ETH_ALEN; i++)
-		mac[i] = rtw_read8(adapter, addr_bfer_info+i);
-	tmp6dc = rtw_read32(adapter, REG_BBPSF_CTRL_8822E); // BIT(12)=63, ~BIT(12)=0
+    for (i = 0; i < ETH_ALEN; i++)
+        mac[i] = rtw_read8(adapter, addr_bfer_info+i);
+    tmp6dc = rtw_read32(adapter, REG_BBPSF_CTRL_8822E); // BIT(12)=63, ~BIT(12)=0
+
+    bfee_sel = rtw_read32(adapter, REG_ASSOCIATED_BFMEE_SEL_8822E);
 	
-	bfee_sel = rtw_read32(adapter, REG_ASSOCIATED_BFMEE_SEL_8822E);
-	
-    RTW_PRINT_SEL(m, "Remote MAC address (When remote as beamformer): %hhu:%hhu:%hhu:%hhu:%hhu:%hhu\n", 
+    RTW_PRINT_SEL(m, "Remote MAC address (When remote as beamformer): %02x:%02x:%02x:%02x:%02x:%02x\n", 
                                                             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     RTW_PRINT_SEL(m, "Remote G_ID (When remote as beamformer): %u\n", (tmp6dc&BIT(12))? 63: 0);
-    RTW_PRINT_SEL(m, "Remote P_AID (When remote as beamformee): \n");
     RTW_PRINT_SEL(m, "REG_TXBF_CTRL_8822E.TXBF0_80M_8822E: %u\n", txbf_ctrl & BIT_R_TXBF0_80M_8822E? 1: 0);
     RTW_PRINT_SEL(m, "REG_TXBF_CTRL_8822E.TXBF0_40M_8822E: %u\n", txbf_ctrl & BIT_R_TXBF0_40M_8822E? 1: 0);
     RTW_PRINT_SEL(m, "REG_TXBF_CTRL_8822E.TXBF0_20M_8822E: %u\n", txbf_ctrl & BIT_R_TXBF0_20M_8822E? 1: 0);
@@ -586,6 +586,24 @@ void bf_monitor_print_conf(PADAPTER adapter, struct seq_file *m)
     RTW_PRINT_SEL(m, "REG_TXBF_CTRL_8822E.ENABLE_NDPA: %u\n", txbf_ctrl & BIT_R_ENABLE_NDPA_8822E? 1: 0);
     RTW_PRINT_SEL(m, "REG_ASSOCIATED_BFMEE_SEL_8822E.AID0: %u\n", BIT_GET_AID0_8822E(bfee_sel));
 
+}
+
+// Set REG_TXBF_CTRL_8822E.TXBF0_*0M_8822E according to CBR feedback
+void bf_monitor_enable_txbf(PADAPTER adapter, bool en)
+{
+	HAL_DATA_TYPE *pHalData;
+	struct csi_rpt_monitor *csi;
+	
+	pHalData = GET_HAL_DATA(adapter);
+	csi = &(pHalData->csi_rpt_monitor);
+        
+        // Only set enable when we got any CSI matrix 
+        if (csi->csi_matrix_len > 0 && en) {
+            bf_monitor_sounding_config(adapter, 1, (enum channel_width)csi->bw);
+        } else {
+             bf_monitor_sounding_config(adapter, 0, CHANNEL_WIDTH_80);
+        }
+        
 }
 
 // RX hooks 
@@ -642,14 +660,19 @@ u32 bf_monitor_get_report_packet(PADAPTER adapter, union recv_frame *precv_frame
 void bf_monitor_c2h_snd_txbf(PADAPTER adapter, u8 *buf, u8 buf_len)
 {
 	u8 res;
-	res = C2H_SND_TXBF_GET_SND_RESULT(buf) ? _TRUE : _FALSE;
-	RTW_INFO("+%s: %s\n", __FUNCTION__, res==_TRUE? "Success": "Fail!");
+	HAL_DATA_TYPE	*pHalData;
+	struct csi_rpt_monitor * csi;
 	
-	// to-do: re-fine the TXBF enable logic here, check bandwidth 
-	if (res == _TRUE)
-	    bf_monitor_sounding_config(adapter, 1, CHANNEL_WIDTH_80);
-	else 
-	    bf_monitor_sounding_config(adapter, 0, CHANNEL_WIDTH_80);
+	pHalData= GET_HAL_DATA(adapter);
+	csi = &(pHalData->csi_rpt_monitor);
+	
+	res = C2H_SND_TXBF_GET_SND_RESULT(buf) ? _TRUE : _FALSE;
+	
+	if (res == _TRUE) {
+	    RTW_INFO("+%s: sounding success!\n", __FUNCTION__);
+        } else {
+	    RTW_INFO("+%s: sounding fail!\n", __FUNCTION__);
+        }
 }
 
 #endif /* CONFIG_BEAMFORMING_MONITOR */
