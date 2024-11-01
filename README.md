@@ -38,7 +38,7 @@ Note: the chipset does not support RX beamforming. Only the Maximum Ratio Combin
  - Beamformee: the role receiving NDPA & NDP, calculate and send the CBR frame
 
 Scenario: 
-Two RTL8812EU adapters with this driver, **STBC disabled, injecting packets only in HT MCS 0\~7 or VHT MCS 0\~9**  
+Two RTL8812EU adapters with this branch driver, or RTL88x2CU adapter with [this driver](https://github.com/libc0607/rtl88x2cu-20230728), **STBC disabled, injecting packets only in HT MCS 0\~7 or VHT MCS 0\~9**  
 ```
 BFer: 00:66:77:88:99:aa
 BFee: 00:11:22:33:44:55
@@ -47,7 +47,7 @@ BFee: 00:11:22:33:44:55
 
 1. On the beamformee side: 
 ```
-# enable bf
+# init bf (init registers, enable interrupt, etc.)
 # <en:0/1> <remote mac addr> <remote g_id> <remote p_aid>
 # In this case just set g_id and p_aid to zero
 echo "1 00:66:77:88:99:aa 0 0" > /proc/net/rtl88x2eu/<wlan0>/bf_monitor_conf
@@ -80,6 +80,14 @@ cat /proc/net/rtl88x2eu/<wlan0>/bf_monitor_trig
 # config
 cat /proc/net/rtl88x2eu/<wlan0>/bf_monitor_conf
 ```
+
+4. Disable beamforming mode
+```
+# only need to set <en:0>
+echo "0 00:00:00:00:00:00 0 0" > /proc/net/rtl88x2eu/<wlan0>/bf_monitor_conf
+
+# Then you can use STBC or MCS8~15 again.
+``` 
 
 Check ```dmesg``` for more details.
 
