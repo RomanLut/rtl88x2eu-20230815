@@ -534,9 +534,7 @@ void bf_monitor_print_cbr(PADAPTER adapter, struct seq_file *m)
 	    bw = 40;
 	else 
 	    bw = 20;
-    
-    RTW_PRINT_SEL(m, "Note: This API is for debug only.\nTo convert the full VHT Compressed Beamforming Report frame into V matrix, please search the GitHub. e.g. Vito-Swift/dpkt-80211BeamformingReport, or watalabo/WiPiCap\n");
-    RTW_PRINT_SEL(m, "\n");
+
     RTW_PRINT_SEL(m, "Nc Index: %hhu Columns\n", (csi->nc)+1);
     RTW_PRINT_SEL(m, "Nr Index: %hhu Rows\n", (csi->nr)+1);
     RTW_PRINT_SEL(m, "Channel Width: %hhu MHz\n", bw);
@@ -546,6 +544,9 @@ void bf_monitor_print_cbr(PADAPTER adapter, struct seq_file *m)
     for (i=0; i<(csi->nc+1); i++) {
         tmp_snr = (csi->snr[i]*25) + 2200;  // tmp_snr: 0.01dB unit
         RTW_PRINT_SEL(m, "Average Signal to Noise Ratio - Stream %hhu: %d mBm\n", i, tmp_snr);
+    }
+    for (i=0; i<(csi->nc+1); i++) {
+        RTW_PRINT_SEL(m, "CBR Frame RSSI %hhu: %d dBm, SNR %hhu: %d dB, EVM %hhu: -%d dB\n", i, csi->rx_pwr[i], i, csi->rx_snr[i], i, csi->rx_evm[i]);
     }
     RTW_PRINT_SEL(m, "CSI Matrix Len: %hu\n", csi->csi_matrix_len);
     RTW_PRINT_SEL(m, "CSI Matrix: \n");
@@ -640,9 +641,13 @@ u32 bf_monitor_get_report_packet(PADAPTER adapter, union recv_frame *precv_frame
 		csi->bw =  (((*pMIMOCtrlField) & 0xC0) >> 6);
 		csi->ng = (*(pMIMOCtrlField+1)) & 0x3;
 		csi->codebook = ((*(pMIMOCtrlField+1)) & 0x4) >> 2;
-        csi->token =  ((*(pMIMOCtrlField+2)) & 0xfc) >> 2;
-        for (i=0; i<Nc+1; i++) 
-            csi->snr[i] = (*(pMIMOCtrlField+3+i));
+                csi->token =  ((*(pMIMOCtrlField+2)) & 0xfc) >> 2;
+                for (i=0; i<Nc+1; i++) {
+                    csi->snr[i] = (*(pMIMOCtrlField+3+i));
+                    csi->rx_snr[i] = precv_frame->u.hdr.attrib.phy_info.rx_snr[i];
+                    csi->rx_pwr[i] = precv_frame->u.hdr.attrib.phy_info.rx_pwr[i];
+                    csi->rx_evm[i] = precv_frame->u.hdr.attrib.phy_info.rx_mimo_evm_dbm[i];
+                }
 		/*
 		 * 24+(1+1+3)+2
 		 * ==> MAC header+(Category+ActionCode+MIMOControlField)+SNR(Nc=2)
