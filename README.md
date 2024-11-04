@@ -9,6 +9,12 @@ Why it can be useful:
 **Beamforming on a pair of 2T2R adapters gives almost no gain (+3dB, theoretically maximum) at all, and only sees some benefit in the middle-range multipath environment.**
 
 ### Progress
+The RTL8812EU adapter can act as both beamformer & beamformee, simultaneously.    
+And, the beamforming only affects TX behavior -- so both sides need to trigger sounding (as beamformer) to maximize the benefit.  
+Note: the chipset does not support RX beamforming. Only the Maximum Ratio Combining (MRC) is improving the minimum SNR requirement.  
+ - Beamformer: the role sending NDPA & NDP, receiving CBR frame, applying V matrix to TX 
+ - Beamformee: the role receiving NDPA & NDP, calculate and send the CBR frame
+
 What we know now:  
 1. The RTL88X2E has proper VHT beamforming implementation in hardware/firmware, and the firmware/hardware does not check if it's working in AP/STA mode
 2. The driver maintains an FSM for the sounding process (while there are maybe >= 3 versions of FSM code in the driver XD)
@@ -26,25 +32,37 @@ Weird behaviors I don't understand:
 4. ... (I'm sure there will be more confusing issues)
 
 ### Usage
+Scenario: 
+Two RTL8812EU adapters with this branch driver, or RTL88x2CU adapter with [this driver](https://github.com/libc0607/rtl88x2cu-20230728), **STBC disabled, injecting packets only in HT MCS 0\~7 or VHT MCS 0\~9**  
+```
+Local MAC Address: 00:66:77:88:99:aa
+Remote MAC Address: 00:11:22:33:44:55
+# Use the stock address (in efuse)! e.g. the LB-LINK starts with 98:03:cf ...
+```
+
+The NDPA + NDP will retransmit if CBR has not been received in ~50us (measured by oscilloscope).  
+The ```ACK_TIMEOUT``` affects the waiting time. By default, it's ```33```us, and can be tuned up to ```255```us.  
+So the sounding range is limited to about 35\~40km.  
+
+To convert the CBR frame to the V matrix (Channel State Information), you need to capture the frame on the BFer side (by Wireshark or sth) first, then check [80211BeamformingReport](https://github.com/Vito-Swift/dpkt-80211BeamformingReport) or [WiPiCap](https://github.com/watalabo/WiPiCap). 
+
+#### Script
+See ```bf_mon.sh```. Should be run on both sides.
+```
+# bf_mon.sh start <WLAN_DRV> <NIC> <LOCAL_MAC> <REMOTE_MAC> <Bandwidth:20/40/80> <ACK_TIMEOUT:33~255> <INTERVAL:second>
+# bf_mon.sh stop  <WLAN_DRV> <NIC>"
+
+# Example: 
+bf_mon.sh start rtl88x2eu wlan0 00:66:77:88:99:aa 00:11:22:33:44:55 20 255 0.1
+bf_mon.sh stop rtl88x2eu wlan0
+```
+
+#### Manually, if you will...
+
 See ```/proc```.
 The APIs are unstable and can be changed. No guarantee it's working.  
 Some of the args do not affect anything in my test, but the Realtek driver filled them, ... and nobody has the datasheet, so I'm just following their code.  
 (In my test -- it works by only giving the correct MAC address. And I've just filled all other things zero.)
-
-The RTL8812EU adapter can act as both beamformer & beamformee, simultaneously.    
-And, the beamforming only affects TX behavior -- so both sides need to trigger sounding (as beamformer) to maximize the benefit.  
-Note: the chipset does not support RX beamforming. Only the Maximum Ratio Combining (MRC) is improving the minimum SNR requirement.  
- - Beamformer: the role sending NDPA & NDP, receiving CBR frame, applying V matrix to TX 
- - Beamformee: the role receiving NDPA & NDP, calculate and send the CBR frame
-
-Scenario: 
-Two RTL8812EU adapters with this branch driver, or RTL88x2CU adapter with [this driver](https://github.com/libc0607/rtl88x2cu-20230728), **STBC disabled, injecting packets only in HT MCS 0\~7 or VHT MCS 0\~9**  
-```
-BFer: 00:66:77:88:99:aa
-BFee: 00:11:22:33:44:55
-# Use the stock address (in efuse)! e.g. the LB-LINK starts with 98:03:cf ...
-```
-
 1. On the beamformee side: 
 ```
 # init bf (init registers, enable interrupt, etc.)
@@ -70,7 +88,6 @@ echo "00:66:77:88:99:aa 00:11:22:33:44:55 0 0 0 20" > /proc/net/rtl88x2eu/<wlan0
 # <en: 0/1>
 echo "1" > /proc/net/rtl88x2eu/<wlan0>/bf_monitor_en
 # and then, the RSSI on the receiver side should increase by several dB ...
-
 ```
 
 3. On the beamformer side, check the status:
@@ -90,8 +107,6 @@ echo "0 00:00:00:00:00:00 0 0" > /proc/net/rtl88x2eu/<wlan0>/bf_monitor_conf
 ``` 
 
 Check ```dmesg``` for more details.
-
-To convert the CBR frame to the V matrix (Channel State Information), you need to capture the frame on the BFer side (by Wireshark or sth) first, then check [80211BeamformingReport](https://github.com/Vito-Swift/dpkt-80211BeamformingReport) or [WiPiCap](https://github.com/watalabo/WiPiCap). 
 
 ### Some picture 
 
